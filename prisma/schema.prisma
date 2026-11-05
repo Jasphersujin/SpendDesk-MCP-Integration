@@ -1,0 +1,237 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Organization {
+ id String @id @default(uuid()) @db.Uuid
+ name String
+ code String @unique
+ industry String?
+ email String
+ status String @default("ACTIVE")
+ mcpEnabled Boolean @default(false)
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ updatedAt DateTime @updatedAt @db.Timestamptz(6)
+ users User[]
+ roles Role[]
+ requests SpendRequest[]
+ budgets Budget[]
+ auditLogs AuditLog[]
+}
+model User {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String? @db.Uuid
+ email String @unique
+ firstName String
+ lastName String
+ department String @default("General")
+ status String @default("ACTIVE")
+ passwordHash String
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ updatedAt DateTime @updatedAt @db.Timestamptz(6)
+ organization Organization? @relation(fields:[organizationId],references:[id])
+ roles UserRole[]
+ requests SpendRequest[] @relation("Requester")
+ approvals Approval[]
+ auditLogs AuditLog[]
+ mcpConnections McpConnection[]
+ @@index([organizationId,status])
+}
+model Role {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String? @db.Uuid
+ code String
+ displayName String
+ description String?
+ roleLevel String
+ accessibility String
+ isSystem Boolean @default(false)
+ isActive Boolean @default(true)
+ deleted Boolean @default(false)
+ organization Organization? @relation(fields:[organizationId],references:[id])
+ users UserRole[]
+ permissions RolePermission[]
+ @@unique([code,organizationId])
+}
+model UserRole {
+ id String @id @default(uuid()) @db.Uuid
+ userId String @db.Uuid
+ roleId String @db.Uuid
+ isActive Boolean @default(true)
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ role Role @relation(fields:[roleId],references:[id])
+ @@unique([userId,roleId])
+}
+model SidebarSection {
+ id String @id @default(uuid()) @db.Uuid
+ code String @unique
+ displayName String
+ displayOrder Int @default(0)
+ isActive Boolean @default(true)
+ menus Menu[]
+}
+model Menu {
+ id String @id @default(uuid()) @db.Uuid
+ sectionId String? @db.Uuid
+ code String @unique
+ displayName String
+ route String
+ displayOrder Int @default(0)
+ isActive Boolean @default(true)
+ section SidebarSection? @relation(fields:[sectionId],references:[id])
+ screens Screen[]
+}
+model Screen {
+ id String @id @default(uuid()) @db.Uuid
+ menuId String @db.Uuid
+ code String @unique
+ displayName String
+ route String @unique
+ isDefault Boolean @default(false)
+ scope String @default("GLOBAL")
+ organizationId String? @db.Uuid
+ isActive Boolean @default(true)
+ menu Menu @relation(fields:[menuId],references:[id])
+ actions ScreenAction[]
+ permissions RolePermission[]
+}
+model Action {
+ id String @id @default(uuid()) @db.Uuid
+ code String @unique
+ displayName String
+ isActive Boolean @default(true)
+ screens ScreenAction[]
+ permissionActions RolePermissionAction[]
+}
+model ScreenAction {
+ id String @id @default(uuid()) @db.Uuid
+ screenId String @db.Uuid
+ actionId String @db.Uuid
+ isActive Boolean @default(true)
+ screen Screen @relation(fields:[screenId],references:[id],onDelete:Cascade)
+ action Action @relation(fields:[actionId],references:[id])
+ @@unique([screenId,actionId])
+}
+model RolePermission {
+ id String @id @default(uuid()) @db.Uuid
+ roleId String @db.Uuid
+ screenId String @db.Uuid
+ isActive Boolean @default(true)
+ role Role @relation(fields:[roleId],references:[id],onDelete:Cascade)
+ screen Screen @relation(fields:[screenId],references:[id])
+ actions RolePermissionAction[]
+ @@unique([roleId,screenId])
+}
+model RolePermissionAction {
+ id String @id @default(uuid()) @db.Uuid
+ rolePermissionId String @db.Uuid
+ actionId String @db.Uuid
+ isActive Boolean @default(true)
+ permission RolePermission @relation(fields:[rolePermissionId],references:[id],onDelete:Cascade)
+ action Action @relation(fields:[actionId],references:[id])
+ @@unique([rolePermissionId,actionId])
+}
+model SpendRequest {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @db.Uuid
+ requestNumber String
+ requesterId String @db.Uuid
+ title String
+ category String
+ amount Decimal @db.Decimal(18,2)
+ currency String @default("INR")
+ priority String @default("NORMAL")
+ vendor String?
+ justification String
+ requiredBy DateTime? @db.Timestamptz(6)
+ status String @default("PENDING_APPROVAL")
+ source String @default("WEB")
+ version Int @default(1)
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ updatedAt DateTime @updatedAt @db.Timestamptz(6)
+ organization Organization @relation(fields:[organizationId],references:[id])
+ requester User @relation("Requester",fields:[requesterId],references:[id])
+ history RequestHistory[]
+ approvals Approval[]
+ @@unique([organizationId,requestNumber])
+ @@index([organizationId,status,createdAt])
+ @@index([requesterId,createdAt])
+}
+model RequestHistory {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @db.Uuid
+ requestId String @db.Uuid
+ actorId String? @db.Uuid
+ event String
+ comment String?
+ oldValues Json?
+ newValues Json?
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ request SpendRequest @relation(fields:[requestId],references:[id],onDelete:Cascade)
+}
+model Approval {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @db.Uuid
+ requestId String @db.Uuid
+ approverId String @db.Uuid
+ decision String
+ comment String?
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ request SpendRequest @relation(fields:[requestId],references:[id],onDelete:Cascade)
+ approver User @relation(fields:[approverId],references:[id])
+}
+model Budget {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @db.Uuid
+ department String
+ fiscalYear Int
+ allocated Decimal @db.Decimal(18,2)
+ committed Decimal @default(0) @db.Decimal(18,2)
+ currency String @default("INR")
+ organization Organization @relation(fields:[organizationId],references:[id])
+ @@unique([organizationId,department,fiscalYear])
+}
+model AuditLog {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String? @db.Uuid
+ actorId String? @db.Uuid
+ action String
+ module String
+ entityType String
+ entityId String?
+ source String @default("WEB")
+ oldValues Json?
+ newValues Json?
+ ipAddress String?
+ correlationId String?
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ organization Organization? @relation(fields:[organizationId],references:[id])
+ actor User? @relation(fields:[actorId],references:[id])
+ @@index([organizationId,createdAt])
+ @@index([action,createdAt])
+}
+model McpConnection {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @db.Uuid
+ userId String @db.Uuid
+ tokenHash String @unique
+ isActive Boolean @default(true)
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+}
+model McpToolLog {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @db.Uuid
+ userId String @db.Uuid
+ toolName String
+ status String
+ errorMessage String?
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+}

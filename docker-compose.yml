@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: spenddesk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: spenddesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - spenddesk_pgdata:/var/lib/postgresql/data
+volumes:
+  spenddesk_pgdata:
